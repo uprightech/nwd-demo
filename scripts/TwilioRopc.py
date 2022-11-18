@@ -58,6 +58,8 @@ class ResourceOwnerPasswordCredentials(ResourceOwnerPasswordCredentialsType):
         self.ERR_OTP_CODE_NOT_SENT = 10004
         self.ERR_OTP_CODE_MISMATCH = 10005
         self.ERR_SESSION_NOT_FOUND = 10006
+        self.ERR_SESSION_INVALID   = 10007
+        self.ERR_INVALID_USER_PASS = 10008
 
         self.STATUS_HTTP_ATTR = "status"
         self.ERROR_CODE_HTTP_ATTR = "error_code"
@@ -166,19 +168,53 @@ class ResourceOwnerPasswordCredentials(ResourceOwnerPasswordCredentialsType):
         
         client = self.getAuthenticatedClient()
         print "NWD ROPC. Performing session validation"
-        if not self.verify_session_is_valid(session,user,client,self.STEP_TWO):
+        if not self.verify_session_is_valid(session,user,client,step):
             print "NWD ROPC. Session verification failed."
+            self.handleInvalidSession(response,context)
             return False
         print "NWD ROPC. Session validation complete"
 
         print "NWD ROPC. Performing OTP Code Verification"
 
         otp_code = request.getParameter(self.PASSWORD_PARAM_NAME)
+        if self.verifyOtpCode(otp_code,session) == False:
+            print "NWD ROPC. OTP verification failed"
+            self.handleInvalidOtpCode(response,context)
+            return False
+        
+        print "NWD ROPC. OTP verification success"
+        self.updateCurrentStep(session,self.STEP_THREE)
+        self.handleStepTwoComplete(response, session, context)
         return False
     
     def performStepThreeAuth(self, request, response, context):
         print "NWD ROPC. Perform Step Three Auth"
-        return False
+        username = request.getParameter(self.USERNAME_PARAM_NAME)
+        password = request.getParameter(self.PASSWORD_PARAM_NAME)
+        step = self.STEP_THREE
+        user = self.fetchUserData(username)
+        session_id = request.getParameter(self.SESSION_ID_PARAM_NAME)
+        session = self.getSessionById(session_id)
+        if session == None:
+            print "NWD ROPC. Step three auth failed. Session {%s} does not exist or has expired" % session_id
+            self.handleSessionExpired(response,context)
+            return False
+        
+        client = self.getAuthenticatedClient()
+        print "NWD ROPC. Performing session validation"
+        if not self.verify_session_is_valid(session, user, client, step):
+            print "NWD ROPC. Session verification failed."
+            self.handleInvalidSession(response, context)
+            return False
+        
+        if self.authenticateUser(user.getUserId(), password, context) ==  False:
+            print "NWD ROPC. Step three auth failed. Invalid username/password"
+            self.handleInvalidUserPass(response,context)
+            return False
+        
+        print "NWD ROPC. Step Three Authentication Success"
+        self.handleStepThreeComplete(response, session, context)
+        return True
     
     def fetchUserData(self, username):
         userService = CdiUtil.bean(UserService)
@@ -210,7 +246,7 @@ class ResourceOwnerPasswordCredentials(ResourceOwnerPasswordCredentialsType):
         sid_attrs.put(Constants.AUTHENTICATED_USER, user.getUserId())
         sid_attrs.put(self.CLIENT_ID_SESSION_PARAM,client.getClientId())
         sid_attrs.put(self.PHONE_NUMBER_SESSION_PARAM,phone_number)
-        sid_attrs.put(self.OTP_CODE_SESSION_PARAM,otp_code)
+        sid_attrs.put(self.OTP_CODE_SESSION_PARAM,str(otp_code))
         return sessionIdService.generateUnauthenticatedSessionId(user.getDn(),auth_date,SessionIdState.UNAUTHENTICATED,sid_attrs,True)
     
     def deleteSession(self, session):
@@ -281,6 +317,16 @@ class ResourceOwnerPasswordCredentials(ResourceOwnerPasswordCredentialsType):
         expected_otp_code = session_attrs.get(self.OTP_CODE_SESSION_PARAM)
         return StringHelper.equalsIgnoreCase(otp_code,expected_otp_code)
     
+    def authenticateUser(self, username, password, context):
+        authService = CdiUtil.bean(AuthenticationService)
+        result = authService.authenticate(username, password)
+        if not result:
+            print "NWD ROPC. User/Password authentication failed for {%s}" % username
+            return False
+        
+        context.setUser(authService.getAuthenticatedUser())
+        return True
+    
     def buildErrorString(self, error_code):
         error_string = "%s=%s;%s=%s" % (self.STATUS_HTTP_ATTR,self.ERROR_HTTP_ATTR_VALUE,self.ERROR_CODE_HTTP_ATTR,error_code)
         return error_string
@@ -324,4 +370,30 @@ class ResourceOwnerPasswordCredentials(ResourceOwnerPasswordCredentialsType):
         return False
     
     def handleSessionExpired(self, response, context):
+        error_message = self.buildErrorString(self.ERR_SESSION_NOT_FOUND)
+        response.setHeader(self.CUSTOM_HTTP_AUTHN_HEADER,error_message)
         return False
+    
+    def handleInvalidSession(self, response, context):
+        error_message = self.buildErrorString(self.ERR_SESSION_INVALID)
+        response.setHeader(self.CUSTOM_HTTP_AUTHN_HEADER,error_message)
+        return False
+    
+    def handleInvalidOtpCode(self, response, context):
+        error_message = self.buildErrorString(self.ERR_OTP_CODE_MISMATCH)
+        response.setHeader(self.CUSTOM_HTTP_AUTHN_HEADER,error_message)
+        return False
+    
+    def handleStepTwoComplete(self, response, session, context):
+        proceed_message = self.buildProceedString(session.getId())
+        response.setHeader(self.CUSTOM_HTTP_AUTHN_HEADER,proceed_message)
+        return False
+    
+    def handleInvalidUserPass(self, response, context):
+        error_message = self.buildErrorString(self.ERR_INVALID_USER_PASS)
+        response.setHeader(self.CUSTOM_HTTP_AUTHN_HEADER,error_message)
+        return False
+    
+    def handleStepThreeComplete(self, response, session, context):
+        #self.deleteSession(session)
+        return True;
