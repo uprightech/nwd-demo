@@ -345,7 +345,7 @@ class ResourceOwnerPasswordCredentials(ResourceOwnerPasswordCredentialsType):
         return proceed_string
     
     def handleUserNotFound(self, response, context):
-        error_message = self.buildError(self.ERR_USER_NOT_FOUND)
+        error_message = self.buildErrorString(self.ERR_USER_NOT_FOUND)
         response.setHeader(self.CUSTOM_HTTP_AUTHN_HEADER,error_message)
         return False
     

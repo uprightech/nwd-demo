@@ -9,16 +9,17 @@ class Home extends BaseController
 {
     public function index()
     {
-        return view('dashboard');
+        $auth = service('auth');
+        return view('dashboard',['user'=>$auth->getUser()->getUsername()]);
     }
 
-    public function test()
+    public function logout()
     {
-        $client = new RopcClient('https://flex-server.local/jans-auth/restv1/token');
-        $client->setClientCredentials('cdbdb926-a55b-4d53-b914-ee4ebae8a11b','yhGmyY2ugTAxegt');
-        $client->setUserCredentials('admin','Programming@1989');
-        $client->setSecure(false);
-        $client->setAuthenticationMethod(RopcClient::AUTHENTICATION_BASIC);
-        echo $client->execute();
+        $auth = service('auth');
+        $session = session();
+        $session->remove('__step');
+        $session->remove('__session_id');
+        $auth->logout();
+        return redirect()->to(url_to('Login::index'));
     }
 }

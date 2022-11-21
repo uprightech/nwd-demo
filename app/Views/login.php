@@ -48,9 +48,22 @@
                                     <div class="text-center">
                                         <h1 class="h4 text-gray-900 mb-4">Gamatech Demo Login</h1>
                                     </div>
+
+                                    <?php if(isset($auth_error)): ?>
+                                    <div class="text-center">
+                                        <h1 class="h4 text-red-900 mb-4">Auth Failed. <?php echo $auth_error; ?></h1>
+                                    </div>
+                                    <?php endif; ?>
+
+                                    <?php if($session->getFlashData('auth_error') != null): ?>
+                                    <div class="text-center">
+                                        <h1 class="h4 text-red-900 mb-4">Auth Failed. <?php echo $session->getFlashData('auth_error'); ?></h1>
+                                    </div>
+                                    <?php endif; ?>
                                     
+                                    <?php if ($step == \App\Controllers\Login::STEP_ONE): ?>
                                     <!-- username login form -->
-                                    <form class="user" method="POST">
+                                    <form class="user" method="POST" action="<?php echo site_url('login');?>">
                                       <div class="form-group">
                                         <input type="text" class="form-control form-control-user" name="username" placeholder="Username or Email"/>
                                       </div>
@@ -58,24 +71,47 @@
                                       <button type="submit" class="btn btn-primary btn-user btn-block">Next</button>
                                     </form>
                                     <!-- end username login form -->
+                                    <?php endif; ?>
                                     
+                                    <?php if ($step == \App\Controllers\Login::STEP_TWO): ?>
                                     <!-- otp login form -->
                                     <form class="user" method="POST">
-                                      <div class="form-group">
-                                         <input type="text" class="form-control form-control-user" name="username" placeholder="Username or Email"/>
+                                      
+                                      <div class="text-center">
+                                        <h1 class="h4 text-gray-900 mb-4">An OTP code was sent to <?php echo $user->getPhoneNumber();?></h1>
                                       </div>
+
+                                      <div class="form-group">
+                                        <input type="text" class="form-control form-control-user" 
+                                            name="username" disabled="disabled" value="<?php echo $user->getUsername();?>"/>
+                                      </div>
+
+                                      <div class="form-group">
+                                         <input type="text" class="form-control form-control-user" name="otp" placeholder="Enter OTP code"/>
+                                      </div>
+
                                       <button type="submit" class="btn btn-primary btn-user btn-block">Next</button>
                                     </form>
                                     <!-- end otp login form -->
+                                    <?php endif; ?>
                                     
+                                    <?php if ($step == \App\Controllers\Login::STEP_THREE): ?>
                                     <!-- password login form -->
                                     <form class="user" method="POST">
+                                      
                                       <div class="form-group">
-                                         <input type="text" class="form-control form-control-user" name="username" placeholder="Username or Email"/>
+                                        <input type="text" class="form-control form-control-user" 
+                                            name="username" disabled="disabled" value="<?php echo $user->getUsername();?>"/>
                                       </div>
+
+                                      <div class="form-group">
+                                         <input type="password" class="form-control form-control-user" name="password" placeholder="Enter Password"/>
+                                      </div>
+
                                       <button type="submit" class="btn btn-primary btn-user btn-block">Complete Authentication</button>
                                     </form>
                                     <!-- end password login form -->
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>

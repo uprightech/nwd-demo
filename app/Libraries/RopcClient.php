@@ -3,6 +3,7 @@
 namespace App\Libraries;
 
 use App\Models\RopcClientException;
+use App\Models\RopcClientResponse;
 
 class RopcClient
 {
@@ -19,6 +20,13 @@ class RopcClient
     const AUTHENTICATION_BASIC = 1;
 
     const RESOURCE_OWNER_PASSWORD_GRANT_TYPE = 'password';
+
+    const AUTH_RESULT_HTTP_HEADER = 'X-NWD-AUTHN';
+
+    const STATUS_HTTP_ATTR = "status";
+    const ERROR_CODE_HTTP_ATTR  = "error_code";
+    const SESSION_ID_HTTP_ATTR  = "session_id";
+    const PHONE_NUMBER_HTTP_ATTR  = "phone_number";
 
     private $endpoint;
     private $clientid;
@@ -58,6 +66,14 @@ class RopcClient
     public function setExtraParameter($paramname, $paramvalue)
     {
         $this->parameters[$paramname] = $paramvalue;
+    }
+
+    public function setExtraParameters($params)
+    {
+        foreach($params as $key => $value) 
+        {
+            $this->parameters[$key] = $value;
+        }
     }
 
     public function setAuthenticationMethod($authmethod) 
@@ -119,7 +135,8 @@ class RopcClient
         $headers_str = substr($ret,0,$header_size);
         $this->parseHeaders($headers_str);
         $body = substr($ret,$header_size);
-        return $body;
+        
+        return $this->buildResponseObject($body);
     }
     
     public function getHttpResponseCode()
@@ -198,5 +215,55 @@ class RopcClient
                     $this->headers["{$matches[0]}"] = trim($matches[1]);
             }
         }
+    }
+
+    private function getHttpHeaderValue($header)
+    {
+        if(isset($this->headers[$header]))
+            return $this->headers[$header];
+        
+        return null;
+    }
+
+    private function buildResponseObject($body)
+    {
+        $response = new RopcClientResponse();
+
+        $response->httpcode = curl_getinfo($this->curlhandle,CURLINFO_HTTP_CODE);
+        $response->body = $body;
+
+        $authn_result_value = null;
+        
+        if(isset($this->headers[self::AUTH_RESULT_HTTP_HEADER]))
+            $authn_result_value = trim($this->headers[self::AUTH_RESULT_HTTP_HEADER]);
+        
+        if($authn_result_value == null) 
+        {
+            return $response;
+        }
+
+        $authn_result_attrs = explode(";",$authn_result_value);
+        foreach($authn_result_attrs as $auth_result_attr)
+        {
+            $kv = explode("=",$auth_result_attr);
+            
+            if(strcasecmp(trim($kv[0]),self::STATUS_HTTP_ATTR)==0)
+            {
+                $response->setAuthStatusFromString(trim($kv[1]));
+            }
+            else if(strcasecmp(trim($kv[0]),self::ERROR_CODE_HTTP_ATTR)==0)
+            {
+                $response->errorcode = (int) trim($kv[1]);
+            }
+            else if(strcasecmp(trim($kv[0]),self::SESSION_ID_HTTP_ATTR)==0)
+            {
+                $response->sessionid = trim($kv[1]);
+            }
+            else if(strcasecmp(trim($kv[0]),self::PHONE_NUMBER_HTTP_ATTR)==0)
+            {
+                $response->phonenumber = trim($kv[1]);
+            }
+        }
+        return $response;
     }
 }
